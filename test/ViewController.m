@@ -26,8 +26,8 @@
 
 @interface ViewController ()
 @property (nonatomic, retain) TKSmartCardSlotManager * mngr;
-@property (nonatomic, retain) NSMutableArray * cards;
 @property (nonatomic, retain) NSMutableArray * slots;
+@property (nonatomic, retain) NSMutableArray * cards;
 @end
 
 @implementation ViewController
@@ -38,8 +38,6 @@
                                     
     self.mngr = [TKSmartCardSlotManager defaultManager];
     assert(self.mngr);
-    
-    self.cards = [[NSMutableArray alloc] init];
 
     // Observe readers joining and leaving.
     //
@@ -49,8 +47,10 @@
 
 -(void)dealloc {
     [self.mngr removeObserver:self forKeyPath:@"slotNames"];
+
     for(id slot in self.slots)
         [slot removeObserver:self];
+    
     for(id card in self.cards)
         [card removeObserver:self];
 }
@@ -62,15 +62,21 @@
     
     if ([keyPath isEqualToString:@"slotNames"]) {
         NSLog(@"(Re)Scanning Slots: %@",[self.mngr slotNames]);
+        
+        // Purge any old observing and rebuild the array.
+        //
+        for(id slot in _slots) {
+            [slot removeObserver:self forKeyPath:@"state"];
 
-        // Purge any old observing.
-        for(id slot in _slots)
-            [slot removeObserver:self forKeyPath:@"slotNames"];
+        }
+        for(id card in self.cards)
+            [card removeObserver:self forKeyPath:@"valid"];
+        
+        self.slots = [[NSMutableArray alloc] init];
+        self.cards = [[NSMutableArray alloc] init];
 
-        _slots = [[NSMutableArray alloc] init];
-    
         for(NSString *slotName in [_mngr slotNames]) {
-            
+
             [_mngr getSlotWithName:slotName reply:^(TKSmartCardSlot *slot) {
                 [_slots addObject:slot];
                 
@@ -113,7 +119,6 @@
         TKSmartCard * sc = object;
         
         if (sc.valid) [sc beginSessionWithReply:^(BOOL success, NSError *error) {
-            assert(success);
             NSLog(@"Card in slot <%@>",sc.slot.name);
             NSLog(@"   now in session, selected protocol: %lx", sc.currentProtocol);
             
